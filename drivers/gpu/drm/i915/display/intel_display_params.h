@@ -49,6 +49,7 @@ struct drm_printer;
 	param(bool, enable_psr2_sel_fetch, true, 0400) \
 	param(int, enable_dmc_wl, -1, 0400) \
 	param(bool, share_dplls, true, 0400) \
+	param(int, pipelock_primary, -1, 0400) \
 
 #define MEMBER(T, member, ...) T member;
 struct intel_display_params {

@@ -620,8 +620,10 @@ void intel_ddi_enable_transcoder_func(struct intel_encoder *encoder,
 				      const struct intel_crtc_state *crtc_state)
 {
 	struct intel_crtc *crtc = to_intel_crtc(crtc_state->uapi.crtc);
+	struct intel_display *display = to_intel_display(crtc_state);
 	struct drm_i915_private *dev_priv = to_i915(crtc->base.dev);
 	enum transcoder cpu_transcoder = crtc_state->cpu_transcoder;
+	enum pipe pipe = crtc->pipe;
 
 	if (DISPLAY_VER(dev_priv) >= 11) {
 		enum transcoder master_transcoder = crtc_state->master_transcoder;
@@ -633,6 +635,20 @@ void intel_ddi_enable_transcoder_func(struct intel_encoder *encoder,
 
 			ctl2 |= PORT_SYNC_MODE_ENABLE |
 				PORT_SYNC_MODE_MASTER_SELECT(master_select);
+		}
+
+		if (display->params.pipelock_primary != INVALID_PIPE) {
+			if (pipe == display->params.pipelock_primary) {
+				ctl2 |= PIPELOCK_MODE_ENABLE |
+					PIPELOCK_MODE_PRIMARY;
+				drm_dbg_kms(display->drm, "pipe %c is primary pipe\n",
+					pipe_name(pipe));
+			} else {
+				ctl2 |= PIPELOCK_MODE_ENABLE |
+				PIPELOCK_MODE_PRIMARY_SELECT(display->params.pipelock_primary);
+				drm_dbg_kms(display->drm, "pipe %c is secondary pipe\n",
+					pipe_name(pipe));
+			}
 		}
 
 		intel_de_write(dev_priv,
