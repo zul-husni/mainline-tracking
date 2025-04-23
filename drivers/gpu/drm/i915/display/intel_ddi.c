@@ -616,6 +616,63 @@ intel_ddi_transcoder_func_reg_val_get(struct intel_encoder *encoder,
 	return temp;
 }
 
+static u32 intel_pipelock_mode(struct intel_encoder *encoder,
+						const struct intel_crtc_state *crtc_state)
+{
+	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
+	struct drm_connector *connector;
+	struct intel_crtc *crtc = to_intel_crtc(crtc_state->uapi.crtc);
+	struct intel_display *display = to_intel_display(crtc_state);
+	enum pipe pipe = crtc->pipe;
+	bool is_hdmi_connected = false;
+	bool is_dp_connected = false;
+	u32 ctl2 = 0;
+
+	list_for_each_entry(connector,
+			&dev_priv->drm.mode_config.connector_list, head) {
+		if ((connector->connector_type == DRM_MODE_CONNECTOR_HDMIA ||
+				connector->connector_type == DRM_MODE_CONNECTOR_HDMIB)
+				&& connector->status == connector_status_connected) {
+			is_hdmi_connected = true;
+		} else if (connector->connector_type ==
+				DRM_MODE_CONNECTOR_DisplayPort &&
+				connector->status == connector_status_connected) {
+			is_dp_connected = true;
+		}
+	}
+
+	drm_dbg_kms(&dev_priv->drm, "HDMI connected: %s, DP connected: %s\n",
+				is_hdmi_connected ? "yes" : "no",
+				is_dp_connected ? "yes" : "no");
+
+	if (display->params.pipelock_primary == INVALID_PIPE) {
+		drm_dbg_kms(display->drm, "pipelock mode disabled\n");
+		return ctl2;
+	}
+
+	if (is_hdmi_connected && is_dp_connected) {
+		drm_err(display->drm, "Unsupported pipelock configuration, aborted\n");
+		return ctl2;
+	}
+
+	if (pipe == display->params.pipelock_primary) {
+		ctl2 |= PIPELOCK_MODE_ENABLE |
+			PIPELOCK_MODE_PRIMARY;
+		drm_dbg_kms(display->drm, "pipe %c is primary pipe\n",
+			pipe_name(pipe));
+	} else {
+		ctl2 |= PIPELOCK_MODE_ENABLE |
+		PIPELOCK_MODE_PRIMARY_SELECT(display->params.pipelock_primary);
+		drm_dbg_kms(display->drm, "pipe %c is secondary pipe\n",
+			pipe_name(pipe));
+	}
+
+	if (IS_PANTHERLAKE(dev_priv))
+		ctl2 |= PIPELOCK_MODE_SYNC_EVERY_FRAME;
+
+	return ctl2;
+}
+
 void intel_ddi_enable_transcoder_func(struct intel_encoder *encoder,
 				      const struct intel_crtc_state *crtc_state)
 {
@@ -634,6 +691,8 @@ void intel_ddi_enable_transcoder_func(struct intel_encoder *encoder,
 			ctl2 |= PORT_SYNC_MODE_ENABLE |
 				PORT_SYNC_MODE_MASTER_SELECT(master_select);
 		}
+
+		ctl2 |= intel_pipelock_mode(encoder, crtc_state);
 
 		intel_de_write(dev_priv,
 			       TRANS_DDI_FUNC_CTL2(dev_priv, cpu_transcoder),

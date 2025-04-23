@@ -138,6 +138,10 @@ intel_display_param_named_unsafe(share_dplls, bool, 0400,
 	"(0=disabled, 1=enabled) "
 	"(Default: 1)");
 
+intel_display_param_named(pipelock_primary, int, 0400,
+	"Primary pipe for pipelock (-1=disabled/invalid [default], 0=pipe A, 1=pipe B,"
+	"2=pipe C, 3=pipe D)");
+
 __maybe_unused
 static void _param_print_bool(struct drm_printer *p, const char *driver_name,
 			      const char *name, bool val)
