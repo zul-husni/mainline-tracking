@@ -241,7 +241,7 @@ static int drm_getcap(struct drm_device *dev, void *data, struct drm_file *file_
 	/* Only some caps make sense with UMS/render-only drivers. */
 	switch (req->capability) {
 	case DRM_CAP_TIMESTAMP_MONOTONIC:
-		req->value = 1;
+		req->value = drm_timestamp_monotonic;
 		return 0;
 	case DRM_CAP_PRIME:
 		req->value = DRM_PRIME_CAP_IMPORT | DRM_PRIME_CAP_EXPORT;

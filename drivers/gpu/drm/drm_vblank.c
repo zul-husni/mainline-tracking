@@ -159,12 +159,20 @@ drm_get_last_vbltimestamp(struct drm_device *dev, unsigned int pipe,
 
 static unsigned int drm_timestamp_precision = 20;  /* Default to 20 usecs. */
 
+/*
+ * Default to use monotonic timestamps for wait-for-vblank and page-flip
+ * complete events.
+ */
+unsigned int drm_timestamp_monotonic = 1;
+
 static int drm_vblank_offdelay = 5000;    /* Default to 5000 msecs. */
 
 module_param_named(vblankoffdelay, drm_vblank_offdelay, int, 0600);
 module_param_named(timestamp_precision_usec, drm_timestamp_precision, int, 0600);
+module_param_named(timestamp_monotonic, drm_timestamp_monotonic, int, 0600);
 MODULE_PARM_DESC(vblankoffdelay, "Delay until vblank irq auto-disable [msecs] (0: never disable, <0: disable immediately)");
 MODULE_PARM_DESC(timestamp_precision_usec, "Max. error on timestamps [usecs]");
+MODULE_PARM_DESC(timestamp_monotonic, "Use monotonic timestamps");
 
 static struct drm_vblank_crtc *
 drm_vblank_crtc(struct drm_device *dev, unsigned int pipe)
@@ -781,6 +789,9 @@ drm_crtc_vblank_helper_get_vblank_timestamp_internal(
 	delta_ns = div_s64(1000000LL * (vpos * mode->crtc_htotal + hpos),
 			   mode->crtc_clock);
 
+	if (!drm_timestamp_monotonic)
+			etime = ktime_mono_to_real(etime);
+
 	/* Subtract time delta from raw timestamp to get final
 	 * vblank_time timestamp for end of vblank.
 	 */
@@ -844,6 +855,11 @@ bool drm_crtc_vblank_helper_get_vblank_timestamp(struct drm_crtc *crtc,
 }
 EXPORT_SYMBOL(drm_crtc_vblank_helper_get_vblank_timestamp);
 
+static ktime_t get_drm_timestamp(void)
+{
+	return drm_timestamp_monotonic ? ktime_get() : ktime_get_real();
+}
+
 /**
  * drm_crtc_get_last_vbltimestamp - retrieve raw timestamp for the most
  *                                  recent vblank interval
@@ -883,7 +899,7 @@ drm_crtc_get_last_vbltimestamp(struct drm_crtc *crtc, ktime_t *tvblank,
 	 * Return current monotonic/gettimeofday timestamp as best estimate.
 	 */
 	if (!ret)
-		*tvblank = ktime_get();
+		*tvblank = get_drm_timestamp();
 
 	return ret;
 }
@@ -1048,11 +1064,9 @@ static void send_vblank_event(struct drm_device *dev,
 	}
 	trace_drm_vblank_event_delivered(e->base.file_priv, e->pipe, seq);
 	/*
-	 * Use the same timestamp for any associated fence signal to avoid
-	 * mismatch in timestamps for vsync & fence events triggered by the
-	 * same HW event. Frameworks like SurfaceFlinger in Android expects the
-	 * retire-fence timestamp to match exactly with HW vsync as it uses it
-	 * for its software vsync modeling.
+	 * e->event is a user space structure, with hardcoded unsigned
+	 * 32-bit seconds/microseconds. This will overflow in 2106 for
+	 * drm_timestamp_monotonic==0, but not with drm_timestamp_monotonic==1
 	 */
 	drm_send_event_timestamp_locked(dev, &e->base, now);
 }
@@ -1133,7 +1147,7 @@ void drm_crtc_send_vblank_event(struct drm_crtc *crtc,
 	} else {
 		seq = 0;
 
-		now = ktime_get();
+		now = get_drm_timestamp();
 	}
 	e->pipe = pipe;
 	send_vblank_event(dev, e, seq, now);
@@ -1716,8 +1730,9 @@ static void drm_wait_vblank_reply(struct drm_device *dev, unsigned int pipe,
 
 	/*
 	 * drm_wait_vblank_reply is a UAPI structure that uses 'long'
-	 * to store the seconds. This is safe as we always use monotonic
-	 * timestamps since linux-4.15.
+	 * to store the seconds. This will overflow in y2038 on 32-bit
+	 * architectures with drm_timestamp_monotonic==0, but not with
+	 * drm_timestamp_monotonic==1 (the default).
 	 */
 	reply->sequence = drm_vblank_count_and_time(dev, pipe, &now);
 	ts = ktime_to_timespec64(now);

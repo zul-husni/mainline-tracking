@@ -365,10 +365,15 @@ intel_find_shared_dpll(struct intel_atomic_state *state,
 	struct intel_shared_dpll_state *shared_dpll;
 	struct intel_shared_dpll *unused_pll = NULL;
 	enum intel_dpll_id id;
+	int total_plls = 0;
 
 	shared_dpll = intel_atomic_get_shared_dpll_state(&state->base);
 
 	drm_WARN_ON(display->drm, dpll_mask & ~dpll_mask_all);
+
+	for_each_set_bit(id, &dpll_mask, I915_NUM_PLLS) {
+				total_plls++;
+			}
 
 	for_each_set_bit(id, &dpll_mask, fls(dpll_mask_all)) {
 		struct intel_shared_dpll *pll;
@@ -384,7 +389,7 @@ intel_find_shared_dpll(struct intel_atomic_state *state,
 			continue;
 		}
 
-		if (memcmp(dpll_hw_state,
+		if ((display->params.share_dplls || total_plls == 1) && memcmp(dpll_hw_state,
 			   &shared_dpll[pll->index].hw_state,
 			   sizeof(*dpll_hw_state)) == 0) {
 			drm_dbg_kms(display->drm,

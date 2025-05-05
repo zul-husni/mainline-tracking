@@ -98,6 +98,7 @@ static inline bool drm_vblank_passed(u64 seq, u64 ref)
 	return (seq - ref) <= (1 << 23);
 }
 
+extern unsigned int drm_timestamp_monotonic;
 void drm_vblank_disable_and_save(struct drm_device *dev, unsigned int pipe);
 int drm_vblank_get(struct drm_device *dev, unsigned int pipe);
 void drm_vblank_put(struct drm_device *dev, unsigned int pipe);
