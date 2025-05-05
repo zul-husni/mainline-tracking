@@ -649,6 +649,10 @@ void intel_ddi_enable_transcoder_func(struct intel_encoder *encoder,
 				drm_dbg_kms(display->drm, "pipe %c is secondary pipe\n",
 					pipe_name(pipe));
 			}
+
+			if (IS_PANTHERLAKE(dev_priv))
+				ctl2 |= PIPELOCK_MODE_SYNC_EVERY_FRAME;
+
 		}
 
 		intel_de_write(dev_priv,
